@@ -5,7 +5,7 @@ FastAPI service that runs YOLO detection + ByteTrack multi-object tracking and s
 ## Prerequisites
 
 - Python 3.10 – 3.12
-- A YOLO detector model (`.pt` file) — downloaded automatically on first boot, or place manually
+- (Optional) CUDA 11.8+ for GPU inference
 
 ## Installation
 
@@ -23,28 +23,42 @@ pip install -r requirements.txt
 
 ## Model setup
 
-Models are downloaded automatically on first boot if the directories are empty.
+**Standard models** (`yolov8n.pt`, `osnet_x0_25_msmt17.pt`) are downloaded automatically on first boot — no action required.
 
-To use custom models, place `.pt` files under:
+**Custom / fine-tuned models** are hosted on [Hugging Face](https://huggingface.co/etemkocaaslan/balkontech-models). Set the following environment variables before starting the server and they will be downloaded automatically:
 
+```bash
+# Windows
+set HF_MODEL_REPO=etemkocaaslan/balkontech-models
+set HF_MODELS=yolo11x_best.pt,yolo26x_best.pt
+
+# Linux / macOS
+export HF_MODEL_REPO=etemkocaaslan/balkontech-models
+export HF_MODELS=yolo11x_best.pt,yolo26x_best.pt
 ```
-balkontech-server/
-└── models/
-    ├── detectors/
-    │   └── yolov8n.pt
-    └── reid/
-        └── osnet_x0_25_msmt17.pt   (optional)
+
+After download, models appear in `models/detectors/` and can be selected from the admin panel.
+
+### Adding new models to Hugging Face (maintainers only)
+
+```bash
+pip install huggingface_hub
+huggingface-cli login
+huggingface-cli upload etemkocaaslan/balkontech-models <local_path/model.pt> <model.pt>
 ```
 
 ## API keys
 
-The server ships with no keys by default. Copy the example file before first run:
+The server ships with no keys. Copy the example file before first run:
 
 ```bash
+# Windows
+copy api_keys.json.example api_keys.json
+# Linux / macOS
 cp api_keys.json.example api_keys.json
 ```
 
-Then create real keys through the admin panel (the example file is a format reference only).
+Then open the admin panel at `http://127.0.0.1:8000` → **🔑 API Keys** to create real keys. The example file is a format reference only.
 
 ## Running
 
@@ -56,7 +70,7 @@ uvicorn api.main:app --host 127.0.0.1 --port 8000 --reload
 |-----|-------------|
 | `http://127.0.0.1:8000` | Admin panel (Stream · Zone Editor · Models · API Keys) |
 | `http://127.0.0.1:8000/zone-editor` | Standalone zone editor |
-| `http://127.0.0.1:8000/docs` | Interactive API docs |
+| `http://127.0.0.1:8000/docs` | Interactive API docs (Swagger) |
 
 ## Environment variables
 
@@ -65,20 +79,22 @@ uvicorn api.main:app --host 127.0.0.1 --port 8000 --reload
 | `MODELS_DIR` | `./models` | Directory scanned for `.pt` model files |
 | `ZONES_DIR` | `./zones` | Directory where zone JSON files are stored |
 | `API_KEYS_FILE` | `./api_keys.json` | Path to the API keys store |
+| `HF_MODEL_REPO` | *(unset)* | Hugging Face repo ID for custom models |
+| `HF_MODELS` | *(unset)* | Comma-separated `.pt` filenames to download from `HF_MODEL_REPO` |
 
 ## Key API endpoints
 
-All endpoints under `/api/v1/` require the `X-API-Key` header.
+All endpoints under `/api/v1/` require an `X-API-Key` header.
 
 | Method | Path | Description |
 |--------|------|-------------|
 | GET | `/api/v1/sessions` | List active sessions |
-| POST | `/api/v1/sessions` | Create session (auto-starts video source if `video_path` given) |
-| DELETE | `/api/v1/sessions/{id}` | Stop and delete session |
-| GET | `/api/v1/sessions/{id}/stream` | MJPEG stream |
-| GET | `/api/v1/sessions/{id}/stats` | Zone occupancy stats |
+| POST | `/api/v1/sessions` | Create a session |
+| DELETE | `/api/v1/sessions/{id}` | Stop and remove a session |
+| GET | `/api/v1/sessions/{id}/stream` | MJPEG video stream |
+| GET | `/api/v1/sessions/{id}/stats` | Zone occupancy statistics |
 | GET | `/api/v1/models` | List available models |
-| GET/POST | `/zones/{video_id}` | List / create zones (admin, no auth) |
+| GET/POST | `/zones/{video_id}` | List / create zones (admin, no auth required) |
 
 ## Docker (optional)
 
@@ -86,4 +102,4 @@ All endpoints under `/api/v1/` require the `X-API-Key` header.
 docker compose up --build
 ```
 
-> Requires Docker Desktop. `api_keys.json` and `models/` must exist before starting.
+> Requires Docker Desktop. `api_keys.json` must exist before starting. Set `HF_MODEL_REPO` and `HF_MODELS` in `docker-compose.yml` if custom models are needed.

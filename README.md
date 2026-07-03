@@ -21,15 +21,21 @@ balkontech-human-tracker/
 
 1. **Start the server** — see [`balkontech-server/README.md`](balkontech-server/README.md)
 2. **Launch the client** — see [`balkontech-client/README.md`](balkontech-client/README.md)
-3. Open the admin panel at `http://127.0.0.1:8000`, create an API key under **🔑 API Keys**
-4. Enter the key in the client via **⚙ Settings**
+3. Open the admin panel at `http://127.0.0.1:8000` and create an API key under **🔑 API Keys**
+4. Enter the server URL and key in the client via **⚙ Settings**
 
 ## Requirements
 
 | Component | Version |
 |-----------|---------|
 | Python | 3.10 – 3.12 |
-| CUDA (optional) | 11.8 + |
+| CUDA (optional) | 11.8+ |
+
+## Models
+
+Custom fine-tuned models are hosted on Hugging Face: [etemkocaaslan/balkontech-models](https://huggingface.co/etemkocaaslan/balkontech-models)
+
+Standard base models (`yolov8n.pt`, `osnet_x0_25_msmt17.pt`) are downloaded automatically on first boot.
 
 ## License
 

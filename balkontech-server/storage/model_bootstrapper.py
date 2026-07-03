@@ -3,6 +3,7 @@ ModelBootstrapper — downloads default models on first boot.
 
 Detector downloads  → Ultralytics auto-download (YOLO("yolov8n.pt") pulls from hub)
 ReID downloads      → BoxMOT's TRAINED_URLS registry + gdown
+Custom models       → Hugging Face Hub (set HF_MODEL_REPO env var)
 """
 
 import logging
@@ -16,7 +17,7 @@ logger = logging.getLogger(__name__)
 
 # ── Default models downloaded when directories are empty ──────────────────────
 
-DEFAULT_DETECTOR = "yolov8n.pt"          # smallest YOLO — always a safe fallback
+DEFAULT_DETECTOR = "yolov8n.pt"             # smallest YOLO — always a safe fallback
 DEFAULT_REID     = "osnet_x0_25_msmt17.pt"  # smallest OSNet, motion-only trackers skip this
 
 _PROJECT_ROOT = Path(__file__).resolve().parent.parent
@@ -36,6 +37,18 @@ class ModelBootstrapper:
     ensure_detectors: bool = True
     ensure_reid: bool      = True
 
+    # Custom models pulled from Hugging Face Hub.
+    # HF_MODEL_REPO=<owner>/<repo>   — the HF dataset/model repo
+    # HF_MODELS=file1.pt,file2.pt    — comma-separated list of filenames to download
+    hf_repo_id: Optional[str] = field(
+        default_factory=lambda: os.getenv("HF_MODEL_REPO")
+    )
+    hf_models: List[str] = field(
+        default_factory=lambda: (
+            [m.strip() for m in os.getenv("HF_MODELS", "").split(",") if m.strip()]
+        )
+    )
+
     # ── Public entry point ────────────────────────────────────────────────────
 
     def bootstrap(self) -> None:
@@ -47,6 +60,9 @@ class ModelBootstrapper:
 
         if self.ensure_reid:
             self._ensure_reid()
+
+        if self.hf_repo_id and self.hf_models:
+            self._ensure_hf_models()
 
     # ── Detectors ─────────────────────────────────────────────────────────────
 
@@ -139,3 +155,35 @@ class ModelBootstrapper:
 
         except Exception as e:
             logger.error("Failed to download ReID model '%s': %s", model_name, e)
+
+    # ── Hugging Face custom models ────────────────────────────────────────────
+
+    def _ensure_hf_models(self) -> None:
+        dest_dir = self.models_dir / "detectors"
+        dest_dir.mkdir(parents=True, exist_ok=True)
+
+        for model_name in self.hf_models:
+            dest = dest_dir / model_name
+            if dest.exists():
+                logger.info("Custom model already present: %s", model_name)
+                continue
+            self._download_from_hf(model_name, dest)
+
+    def _download_from_hf(self, model_name: str, dest: Path) -> None:
+        """Download a file from Hugging Face Hub into our detectors directory."""
+        logger.info("Downloading custom model from HF Hub: %s/%s", self.hf_repo_id, model_name)
+        try:
+            from huggingface_hub import hf_hub_download
+
+            cached = hf_hub_download(
+                repo_id=self.hf_repo_id,
+                filename=model_name,
+            )
+            shutil.copy2(cached, dest)
+            logger.info("Custom model saved: %s", dest)
+
+        except Exception as e:
+            logger.error(
+                "Failed to download '%s' from HF Hub repo '%s': %s",
+                model_name, self.hf_repo_id, e,
+            )
