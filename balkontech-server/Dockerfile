@@ -8,7 +8,10 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
 WORKDIR /app
 
 COPY requirements.txt .
-RUN pip install --no-cache-dir -r requirements.txt
+
+# pip cache mount: downloaded wheels are reused on subsequent builds
+RUN --mount=type=cache,target=/root/.cache/pip \
+    pip install -r requirements.txt
 
 COPY . .
 
@@ -24,5 +27,4 @@ ENV PYTHONPATH=/app
 
 EXPOSE 8000
 
-# Bind to 0.0.0.0 inside container; expose only to localhost via docker-compose
-CMD ["uvicorn", "api.main:app", "--host", "0.0.0.0", "--port", "8000"]
+CMD ["uvicorn", "api.main:app", "--host", "127.0.0.1", "--port", "8000"]
