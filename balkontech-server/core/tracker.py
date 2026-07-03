@@ -1,13 +1,9 @@
 """
-Core tracking logic — adapted from boxmot_cyolo.py (original file untouched).
+Core tracking utilities.
 
-Responsibilities:
-  - build_bytetrack()  : create a ByteTrack instance with custom params
-  - yolo_to_boxmot()   : convert Ultralytics YOLO output → BoxMOT (N,6) array
-  - load_detector()    : load a YOLO model from path
-
-Note: patch_bytetrack() from boxmot_cyolo.py is intentionally omitted here —
-the service creates fresh tracker instances per session instead of mutating live ones.
+  build_bytetrack()  : create a ByteTrack instance with custom params
+  yolo_to_boxmot()   : convert Ultralytics YOLO output → BoxMOT (N,6) array
+  load_detector()    : load a YOLO model from path
 """
 
 from pathlib import Path

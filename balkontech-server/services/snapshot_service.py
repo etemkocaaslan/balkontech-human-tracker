@@ -16,7 +16,6 @@ import cv2
 
 from schemas.zones import SnapshotResponse
 
-# Two levels up from services/ → project root → parent directory where video files may live
 _PARENT_DIR = Path(__file__).resolve().parents[2]
 
 

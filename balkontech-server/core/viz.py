@@ -1,9 +1,9 @@
 """
-Visualization utilities — adapted from boxmot_cyolo.py (original untouched).
+Visualization utilities.
 
-draw_tracks()  : draws bbox + label on a frame copy
-encode_jpeg()  : converts a numpy frame to JPEG bytes for MJPEG streaming
-draw_zones()   : draws semi-transparent zone polygons (in-place)
+  draw_tracks()  : draws bounding box + label on a frame copy
+  encode_jpeg()  : converts a numpy frame to JPEG bytes for MJPEG streaming
+  draw_zones()   : draws semi-transparent zone polygons on a frame (in-place)
 """
 
 import cv2

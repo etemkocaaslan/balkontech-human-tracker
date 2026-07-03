@@ -1,25 +1,18 @@
 """
-ModelBootstrapper
-
-Runs at service startup. For each model category (detectors, reid):
-  1. Checks if the directory is empty.
-  2. If empty (or a named model is missing), downloads the defaults.
+ModelBootstrapper — downloads default models on first boot.
 
 Detector downloads  → Ultralytics auto-download (YOLO("yolov8n.pt") pulls from hub)
 ReID downloads      → BoxMOT's TRAINED_URLS registry + gdown
-
-Usage:
-    from storage.model_bootstrapper import ModelBootstrapper
-
-    bootstrapper = ModelBootstrapper()
-    bootstrapper.bootstrap()          # call once at startup
 """
 
+import logging
 import shutil
 from dataclasses import dataclass, field
 from pathlib import Path
 from typing import List, Optional
 import os
+
+logger = logging.getLogger(__name__)
 
 # ── Default models downloaded when directories are empty ──────────────────────
 
@@ -38,11 +31,8 @@ class ModelBootstrapper:
         )
     )
 
-    # Override these to change which defaults get pulled on first boot
     default_detectors: List[str] = field(default_factory=lambda: [DEFAULT_DETECTOR])
     default_reid: List[str]      = field(default_factory=lambda: [DEFAULT_REID])
-
-    # Set to False to skip a category entirely
     ensure_detectors: bool = True
     ensure_reid: bool      = True
 
@@ -67,7 +57,7 @@ class ModelBootstrapper:
         for model_name in self.default_detectors:
             dest = dest_dir / model_name
             if dest.exists():
-                print(f"[Bootstrapper] Detector already present: {model_name}")
+                logger.info("Detector already present: %s", model_name)
                 continue
             self._download_detector(model_name, dest)
 
@@ -76,21 +66,20 @@ class ModelBootstrapper:
         Ultralytics YOLO auto-downloads to its cache when instantiated.
         We locate the cached file and copy it to our models dir.
         """
-        print(f"[Bootstrapper] Downloading detector: {model_name} ...")
+        logger.info("Downloading detector: %s", model_name)
         try:
             from ultralytics import YOLO
             from ultralytics.utils import WEIGHTS_DIR
 
-            # Instantiating triggers download to ultralytics cache
+            # Instantiating YOLO triggers download to the ultralytics cache directory
             model = YOLO(model_name)
 
-            # Find the downloaded file — ultralytics puts it in cwd or WEIGHTS_DIR
+            # Locate the downloaded file — ultralytics may put it in cwd or WEIGHTS_DIR
             candidates = [
-                Path(model_name),              # cwd
+                Path(model_name),
                 Path.cwd() / model_name,
                 WEIGHTS_DIR / model_name,
             ]
-            # Also check wherever ultralytics actually stored it
             if hasattr(model, "ckpt_path") and model.ckpt_path:
                 candidates.insert(0, Path(model.ckpt_path))
 
@@ -101,14 +90,14 @@ class ModelBootstrapper:
                     break
 
             if source is None:
-                print(f"[Bootstrapper] Warning: could not locate downloaded {model_name} — skipping copy.")
+                logger.warning("Could not locate downloaded %s — skipping copy.", model_name)
                 return
 
             shutil.copy2(source, dest)
-            print(f"[Bootstrapper] Detector saved: {dest}")
+            logger.info("Detector saved: %s", dest)
 
         except Exception as e:
-            print(f"[Bootstrapper] Failed to download detector '{model_name}': {e}")
+            logger.error("Failed to download detector '%s': %s", model_name, e)
 
     # ── ReID models ───────────────────────────────────────────────────────────
 
@@ -119,7 +108,7 @@ class ModelBootstrapper:
         for model_name in self.default_reid:
             dest = dest_dir / model_name
             if dest.exists():
-                print(f"[Bootstrapper] ReID already present: {model_name}")
+                logger.info("ReID model already present: %s", model_name)
                 continue
             self._download_reid(model_name, dest)
 
@@ -128,25 +117,25 @@ class ModelBootstrapper:
         Uses BoxMOT's TRAINED_URLS registry to resolve the Google Drive URL,
         then downloads with gdown.
         """
-        print(f"[Bootstrapper] Downloading ReID model: {model_name} ...")
+        logger.info("Downloading ReID model: %s", model_name)
         try:
             from boxmot.reid.core.config import TRAINED_URLS
             import gdown
 
             url = TRAINED_URLS.get(model_name)
             if url is None:
-                print(
-                    f"[Bootstrapper] '{model_name}' not found in BoxMOT TRAINED_URLS.\n"
-                    f"  Available: {list(TRAINED_URLS.keys())}"
+                logger.warning(
+                    "'%s' not found in BoxMOT TRAINED_URLS. Available: %s",
+                    model_name, list(TRAINED_URLS.keys()),
                 )
                 return
 
             gdown.download(url, str(dest), quiet=False)
 
             if dest.exists():
-                print(f"[Bootstrapper] ReID saved: {dest}")
+                logger.info("ReID model saved: %s", dest)
             else:
-                print(f"[Bootstrapper] Warning: gdown finished but file not found at {dest}")
+                logger.warning("gdown completed but file not found at %s", dest)
 
         except Exception as e:
-            print(f"[Bootstrapper] Failed to download ReID model '{model_name}': {e}")
+            logger.error("Failed to download ReID model '%s': %s", model_name, e)

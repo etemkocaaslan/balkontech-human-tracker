@@ -31,7 +31,7 @@ app.include_router(ui.router)           # GET /   GET /ui
 app.include_router(api_keys_router)     # GET/POST/DELETE /admin/keys
 app.include_router(zone_editor_router)  # GET /zone-editor
 
-# Legacy direct routes (admin use, no auth) — keep for admin panel compatibility
+# ── Unauthenticated routes (used by the admin panel) ─────────────────────────
 app.include_router(models.router)
 app.include_router(sessions.router)
 app.include_router(stream.router)

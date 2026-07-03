@@ -3,7 +3,6 @@ VideoSourceService — background video ingestion per session.
 
 Starts one thread per session that reads a video file with cv2.VideoCapture,
 runs detection + tracking, and writes annotated frames into SessionStore.
-The existing MJPEG stream endpoint and stats endpoint work unchanged.
 """
 
 from __future__ import annotations
