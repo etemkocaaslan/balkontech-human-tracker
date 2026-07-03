@@ -21,6 +21,9 @@ services:
       - MODELS_DIR=/app/models
       - ZONES_DIR=/app/zones
       - API_KEYS_FILE=/app/api_keys.json
+      # Custom models — remove the # to enable
+      #- HF_MODEL_REPO=etemkocaaslan/balkontech-models
+      #- HF_MODELS=yolo11x_best.pt,yolo26x_best.pt
 
     restart: unless-stopped
 
