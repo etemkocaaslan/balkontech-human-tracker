@@ -1,0 +1,8 @@
+[
+  {
+    "id": "replace_with_generated_id",
+    "name": "my-client",
+    "key_hash": "replace_with_sha256_hash_of_raw_key",
+    "created_at": "2026-01-01T00:00:00.000000+00:00"
+  }
+]
