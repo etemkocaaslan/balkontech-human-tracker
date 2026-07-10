@@ -76,6 +76,23 @@ def list_sessions(service: SessionService = Depends(get_session_service)):
     return service.get_session_ids()
 
 
+@router.get("/{session_id}", response_model=SessionInfo)
+def get_session(
+    session_id: str,
+    service: SessionService = Depends(get_session_service),
+):
+    session = service._store.get(session_id)
+    if not session:
+        raise HTTPException(status_code=404, detail=f"Session '{session_id}' not found.")
+    return SessionInfo(
+        session_id=session.session_id,
+        detector_model=session.config.detector_model,
+        tracker_type=session.config.tracker_type,
+        device=session.config.device,
+        target_classes=session.config.target_classes,
+    )
+
+
 @router.delete("/{session_id}", status_code=204)
 def delete_session(
     session_id: str,

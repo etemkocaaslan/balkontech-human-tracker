@@ -1,0 +1,8 @@
+# Balkontech Master Dashboard — Python dependencies
+# These are installed into the 'fwa' venv by the setup wizard.
+# The dashboard itself (launched by the system Python) also needs PyQt6 + httpx.
+
+PyQt6>=6.7.0
+PyQt6-Qt6>=6.7.0
+PyQt6-sip>=13.6.0
+httpx>=0.27.0
