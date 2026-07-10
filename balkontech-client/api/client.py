@@ -37,6 +37,11 @@ class BHTClient:
         r.raise_for_status()
         return r.json()
 
+    def _patch(self, path: str, json: dict | None = None) -> Any:
+        r = self._session.patch(self._url(path), headers=self._headers(), json=json, timeout=10)
+        r.raise_for_status()
+        return r.json()
+
     def _delete(self, path: str) -> int:
         r = self._session.delete(self._url(path), headers=self._headers(), timeout=10)
         r.raise_for_status()
@@ -61,11 +66,17 @@ class BHTClient:
     def list_models(self) -> List[Dict]:
         return self._get("/models")
 
+    def list_reid_catalog(self) -> List[Dict]:
+        """Return the full ReID catalog with downloaded status from the server."""
+        return self._get("/models/reid/catalog")
+
     # ── Sessions ──────────────────────────────────────────────────────────────
 
     def create_session(
         self,
         detector_model: str = "yolov8n.pt",
+        tracker_type: str = "bytetrack",
+        reid_model: Optional[str] = None,
         conf_threshold: float = 0.25,
         nms_iou_threshold: float = 0.45,
         target_classes: Optional[List[int]] = None,
@@ -79,7 +90,7 @@ class BHTClient:
     ) -> Dict:
         payload: Dict = {
             "detector_model": detector_model,
-            "tracker_type": "bytetrack",
+            "tracker_type": tracker_type,
             "conf_threshold": conf_threshold,
             "nms_iou_threshold": nms_iou_threshold,
             "target_classes": target_classes or [0],
@@ -89,6 +100,8 @@ class BHTClient:
             "fps_target": fps_target,
             "loop": loop,
         }
+        if reid_model:
+            payload["reid_model"] = reid_model
         if video_id:
             payload["video_id"] = video_id
         if video_path:
@@ -96,20 +109,17 @@ class BHTClient:
         return self._post("/sessions", json=payload)
 
     def list_sessions(self) -> List[Dict]:
-        """
-        Returns sessions as a list of dicts with at least a 'session_id' key.
-        Normalises the backend's List[str] response for caller convenience.
-        """
-        raw = self._get("/sessions")
-        if raw and isinstance(raw[0], str):
-            return [{"session_id": sid} for sid in raw]
-        return raw
+        """Returns sessions as a list of SessionInfo dicts."""
+        return self._get("/sessions")
 
     def get_stats(self, session_id: str) -> Dict:
         return self._get(f"/sessions/{session_id}/stats")
 
     def delete_session(self, session_id: str) -> int:
         return self._delete(f"/sessions/{session_id}")
+
+    def set_display_options(self, session_id: str, *, show_id: bool) -> Dict:
+        return self._patch(f"/sessions/{session_id}/display", json={"show_id": show_id})
 
     def track_frame(self, session_id: str, frame_b64: str, video_id: Optional[str] = None) -> Dict:
         payload: Dict = {"frame_b64": frame_b64}

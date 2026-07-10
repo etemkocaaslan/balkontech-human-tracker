@@ -3,27 +3,32 @@ SnapshotService — extracts a single frame from a video file.
 
 Path resolution order:
   1. As given (absolute or relative to CWD)
-  2. Relative to the service's parent directory (where videos typically live)
-  3. Raises FileNotFoundError if none found
+  2. Relative to VIDEOS_DIR env var (set in Docker / production)
+  3. Relative to CWD / videos/
+  4. Relative to the project root
+  5. Raises FileNotFoundError if none found
 """
 
 from __future__ import annotations
 
 import base64
+import os
 from pathlib import Path
 
 import cv2
 
 from schemas.zones import SnapshotResponse
 
-_PARENT_DIR = Path(__file__).resolve().parents[2]
+_PROJECT_ROOT = Path(__file__).resolve().parents[1]
+_VIDEOS_DIR = Path(os.getenv("VIDEOS_DIR", _PROJECT_ROOT / "videos"))
 
 
 def _resolve_video_path(video_path: str) -> Path:
     candidates = [
         Path(video_path),
-        Path.cwd() / video_path,
-        _PARENT_DIR / video_path,
+        _VIDEOS_DIR / video_path,
+        Path.cwd() / "videos" / video_path,
+        _PROJECT_ROOT / video_path,
     ]
     for p in candidates:
         if p.exists():

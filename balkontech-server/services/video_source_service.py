@@ -165,7 +165,7 @@ class VideoSourceService:
                 annotated = frame.copy()
                 if zones:
                     draw_zones(annotated, zones)
-                annotated = draw_tracks(annotated, tracks, zone_map=zone_map)
+                annotated = draw_tracks(annotated, tracks, zone_map=zone_map, show_id=session.show_id)
 
                 self._store.set_annotated_frame(session.session_id, encode_jpeg(annotated))
                 self._store.set_track_count(session.session_id, len(tracks) if tracks is not None else 0)
@@ -174,7 +174,11 @@ class VideoSourceService:
                 for tid, zname in zone_map.items():
                     occupancy[zname].append(tid)
                 self._store.set_zone_occupancy(session.session_id, dict(occupancy))
-                self._store.increment_frame(session.session_id)
+                try:
+                    self._store.increment_frame(session.session_id) # When Client delete the session, in Increment_frame raises KeyError, but the thread will continue to run. So we need to catch the exception and break the loop. 
+                except KeyError:
+                    logger.warning("Session %s not found in store", session.session_id[:8])
+                    break
 
                 state.frame_index += 1
 

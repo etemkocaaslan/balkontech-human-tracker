@@ -173,6 +173,22 @@ input:focus,select:focus{border-color:#444}
       <label>Detector model</label>
       <select id="c-model"><option value="yolov8n.pt">yolov8n.pt</option></select>
 
+      <label>Tracker</label>
+      <select id="c-tracker" onchange="onTrackerChange(this.value)">
+        <option value="bytetrack">ByteTrack (motion only)</option>
+        <option value="ocsort">OcSort (motion only)</option>
+        <option value="boosttrack">BoostTrack (appearance)</option>
+        <option value="botsort">BotSort (appearance)</option>
+        <option value="deepocsort">DeepOcSort (appearance)</option>
+        <option value="hybridsort">HybridSort (appearance)</option>
+        <option value="strongsort">StrongSort (appearance)</option>
+      </select>
+
+      <div id="reid-row" style="display:none">
+        <label>ReID model <span style="color:var(--red)">*</span></label>
+        <select id="c-reid"><option value="">— Loading… —</option></select>
+      </div>
+
       <div class="row2">
         <div>
           <label>Conf threshold</label>
@@ -197,8 +213,8 @@ input:focus,select:focus{border-color:#444}
         <div>
           <label>Device</label>
           <select id="c-device">
-            <option value="cpu" selected>CPU</option>
-            <option value="0">GPU 0</option>
+            <option value="cpu">CPU</option>
+            <option value="0" selected>GPU 0 (CUDA)</option>
             <option value="1">GPU 1</option>
           </select>
         </div>
@@ -249,6 +265,7 @@ input:focus,select:focus{border-color:#444}
         <div class="stat-card"><div class="v" id="s-frame">—</div><div class="l">Frame</div></div>
       </div>
       <button class="btn danger" id="stop-btn" onclick="stopStream()" style="display:none">■ Stop</button>
+      <button class="btn" id="show-id-btn" onclick="toggleShowId()" style="display:none;margin-top:6px">🔖 Hide ID</button>
     </div>
 
     <div class="sb" style="flex:1">
@@ -268,14 +285,32 @@ input:focus,select:focus{border-color:#444}
 
 <!-- ══════════ MODELS TAB ══════════ -->
 <div class="pane hidden" id="tab-models">
-  <div style="padding:24px;flex:1;overflow-y:auto;max-width:640px">
-    <h2 style="font-size:.65rem;text-transform:uppercase;letter-spacing:.12em;color:var(--dim);margin-bottom:14px">Available Models</h2>
-    <div class="model-grid" id="model-grid">
-      <div class="empty">Loading…</div>
+  <div style="padding:24px;flex:1;overflow-y:auto;display:flex;gap:32px;flex-wrap:wrap;align-items:flex-start">
+
+    <!-- Detector models -->
+    <div style="min-width:260px;flex:1">
+      <h2 style="font-size:.65rem;text-transform:uppercase;letter-spacing:.12em;color:var(--dim);margin-bottom:14px">Detector Models</h2>
+      <div class="model-grid" id="model-grid">
+        <div class="empty">Loading…</div>
+      </div>
+      <div class="btn-row" style="margin-top:16px">
+        <button class="btn sm" onclick="loadModels()">↻ Refresh</button>
+      </div>
     </div>
-    <div class="btn-row" style="margin-top:16px">
-      <button class="btn sm" onclick="loadModels()">↻ Refresh</button>
+
+    <!-- ReID catalog -->
+    <div style="min-width:300px;flex:1.2">
+      <h2 style="font-size:.65rem;text-transform:uppercase;letter-spacing:.12em;color:var(--dim);margin-bottom:6px">ReID Models</h2>
+      <p style="font-size:.68rem;color:var(--muted);margin-bottom:12px">Required for appearance-based trackers (BotSort, BoostTrack, StrongSort, DeepOcSort, HybridSort).</p>
+      <div id="reid-catalog-grid" style="display:flex;flex-direction:column;gap:6px">
+        <div class="empty">Loading…</div>
+      </div>
+      <div id="reid-dl-msg" style="margin-top:8px"></div>
+      <div class="btn-row" style="margin-top:12px">
+        <button class="btn sm" onclick="loadReidCatalog()">↻ Refresh</button>
+      </div>
     </div>
+
   </div>
 </div>
 
@@ -321,7 +356,7 @@ function switchTab(name) {
   document.querySelectorAll('.tab').forEach((b,i) => {
     b.classList.toggle('active', ['stream','zones','models','keys'][i] === name);
   });
-  if (name === 'models') loadModels();
+  if (name === 'models') { loadModels(); loadReidCatalog(); }
   if (name === 'keys')   loadKeys();
   if (name === 'zones' && zeImg) { setTimeout(zeResizeCanvas,50); zeDrawAll(); }
 }
@@ -331,19 +366,20 @@ function switchTab(name) {
 // ═══════════════════════════════════════════════════════════
 let activeSession = null;
 let statsInterval = null;
+let _showId = true;
 const ZONE_COLORS = ['#3b89eb','#f59e2d','#e451b4','#4cb35b','#b4b604','#5050c8'];
 
 async function refreshSessions() {
   const res  = await fetch('/sessions').catch(()=>null);
   if (!res || !res.ok) return;
-  const ids  = await res.json();
+  const sessions = await res.json();  // List[SessionInfo] objects
   const list = document.getElementById('session-list');
-  if (!ids.length) { list.innerHTML='<li class="empty">No sessions</li>'; return; }
-  list.innerHTML = ids.map(id => `
-    <li class="session-item ${id===activeSession?'active':''}" onclick="selectSession('${id}')">
+  if (!sessions.length) { list.innerHTML='<li class="empty">No sessions</li>'; return; }
+  list.innerHTML = sessions.map(s => `
+    <li class="session-item ${s.session_id===activeSession?'active':''}" onclick="selectSession('${s.session_id}')">
       <span class="sdot"></span>
-      <span class="sid" title="${id}">${id.slice(0,8)}…</span>
-      <button class="sdel" onclick="event.stopPropagation();deleteSession('${id}')" title="Delete">✕</button>
+      <span class="sid" title="${s.session_id}">${s.session_id.slice(0,8)}… <small style="opacity:.7">${s.detector_model} [${s.tracker_type}]</small></span>
+      <button class="sdel" onclick="event.stopPropagation();deleteSession('${s.session_id}')" title="Delete">✕</button>
     </li>`).join('');
 }
 
@@ -351,14 +387,21 @@ async function createSession() {
   const videoPath = document.getElementById('c-video').value.trim();
   const videoIdRaw = document.getElementById('c-videoid').value.trim();
   const classes   = document.getElementById('c-classes').value.split(',').map(s=>parseInt(s.trim())).filter(n=>!isNaN(n));
+  const trackerType = document.getElementById('c-tracker').value;
+  const reidModel   = document.getElementById('c-reid').value.trim();
+  const MOTION_ONLY = new Set(['bytetrack','ocsort']);
+  if (!MOTION_ONLY.has(trackerType) && !reidModel) {
+    setMsg('create-msg', `Tracker "${trackerType}" requires a ReID model`, 'err'); return;
+  }
   const body = {
     detector_model:    document.getElementById('c-model').value,
-    tracker_type:      'bytetrack',
+    tracker_type:      trackerType,
     conf_threshold:    parseFloat(document.getElementById('c-conf').value),
     nms_iou_threshold: parseFloat(document.getElementById('c-nms').value),
     imgsz:             parseInt(document.getElementById('c-imgsz').value),
     device:            document.getElementById('c-device').value,
     target_classes:    classes.length ? classes : [0],
+    ...(reidModel && { reid_model: reidModel }),
     tracker_params: {
       track_buffer: parseInt(document.getElementById('c-tbuf').value),
       match_thresh: parseFloat(document.getElementById('c-match').value),
@@ -394,6 +437,9 @@ function selectSession(id) {
   document.getElementById('stop-btn').style.display = 'block';
   document.getElementById('live-badge').textContent = 'LIVE';
   document.getElementById('live-badge').className = 'hbadge live';
+  document.getElementById('show-id-btn').style.display = 'block';
+  _showId = true;
+  document.getElementById('show-id-btn').textContent = '🔖 Hide ID';
 
   refreshSessions();
   statsInterval = setInterval(()=>fetchStats(id), 1000);
@@ -406,6 +452,7 @@ function stopStream(doRefresh=true) {
   img.src=''; img.style.display='none';
   document.getElementById('placeholder').style.display='flex';
   document.getElementById('stop-btn').style.display='none';
+  document.getElementById('show-id-btn').style.display='none';
   document.getElementById('live-badge').textContent='IDLE';
   document.getElementById('live-badge').className='hbadge';
   clearInterval(statsInterval); statsInterval=null;
@@ -415,6 +462,18 @@ function stopStream(doRefresh=true) {
   activeSession=null;
   if (doRefresh) refreshSessions();
   setStatus('Ready');
+}
+
+async function toggleShowId() {
+  if (!activeSession) return;
+  _showId = !_showId;
+  const btn = document.getElementById('show-id-btn');
+  btn.textContent = _showId ? '🔖 Hide ID' : '🔖 Show ID';
+  await fetch(`/sessions/${activeSession}/display`, {
+    method: 'PATCH',
+    headers: {'Content-Type':'application/json'},
+    body: JSON.stringify({show_id: _showId}),
+  });
 }
 
 async function deleteSession(id) {
@@ -454,6 +513,26 @@ function renderZoneStatus(occ) {
   }).join('');
 }
 
+// show/hide ReID field based on tracker selection
+const MOTION_ONLY_TRACKERS = new Set(['bytetrack','ocsort']);
+function onTrackerChange(val) {
+  const show = !MOTION_ONLY_TRACKERS.has(val);
+  document.getElementById('reid-row').style.display = show ? 'block' : 'none';
+}
+
+async function populateReidDropdown() {
+  const res = await fetch('/models').catch(()=>null);
+  if (!res || !res.ok) return;
+  const models = await res.json();
+  const reid = models.filter(m => m.has_reid);
+  const sel = document.getElementById('c-reid');
+  if (!reid.length) {
+    sel.innerHTML = '<option value="">— No ReID models found —</option>';
+  } else {
+    sel.innerHTML = reid.map(m=>`<option value="${m.name}">${m.name} (${m.size_mb.toFixed(1)} MB)</option>`).join('');
+  }
+}
+
 // populate model dropdown from /models
 async function populateModelDropdown() {
   const res = await fetch('/models').catch(()=>null);
@@ -472,15 +551,61 @@ async function loadModels() {
   const grid = document.getElementById('model-grid');
   if (!res||!res.ok) { grid.innerHTML='<div class="empty">Cannot reach service</div>'; return; }
   const models = await res.json();
-  if (!models.length) { grid.innerHTML='<div class="empty">No models found</div>'; return; }
-  grid.innerHTML = models.map(m=>`
+  const detectors = models.filter(m=>m.has_detector);
+  if (!detectors.length) { grid.innerHTML='<div class="empty">No detector models found</div>'; return; }
+  grid.innerHTML = detectors.map(m=>`
     <div class="model-card">
       <div class="model-icon">.pt</div>
       <div>
         <div class="model-name">${m.name}</div>
-        <div class="model-type">${m.has_detector?'✓ Detector':''} ${m.has_reid?'✓ ReID':''}</div>
+        <div class="model-type" style="color:var(--green)">✓ Detector &nbsp;·&nbsp; ${m.size_mb.toFixed(1)} MB</div>
       </div>
     </div>`).join('');
+}
+
+async function loadReidCatalog() {
+  const res = await fetch('/models/reid/catalog').catch(()=>null);
+  const grid = document.getElementById('reid-catalog-grid');
+  if (!res||!res.ok) { grid.innerHTML='<div class="empty">Cannot reach service</div>'; return; }
+  const catalog = await res.json();
+  grid.innerHTML = catalog.map(m => {
+    const dl = m.downloaded;
+    return `<div class="model-card" style="${dl?'border-color:#22c55e33;background:#1a2e1a':''}">
+      <div class="model-icon" style="font-size:.6rem;${dl?'color:var(--green)':''}">${dl?'✓':'.pt'}</div>
+      <div style="flex:1">
+        <div class="model-name">${m.name}</div>
+        <div class="model-type">${m.description} &nbsp;·&nbsp; ${m.size_mb} MB</div>
+      </div>
+      ${dl
+        ? '<span style="font-size:.65rem;color:var(--green);white-space:nowrap">Downloaded</span>'
+        : `<button class="btn sm" onclick="downloadReid('${m.name}',this)" style="white-space:nowrap;flex-shrink:0">⬇ Download</button>`
+      }
+    </div>`;
+  }).join('');
+}
+
+async function downloadReid(name, btn) {
+  btn.disabled = true;
+  btn.textContent = '⏳ Downloading…';
+  setMsg('reid-dl-msg', `Downloading ${name}… this may take a minute.`, 'info');
+  const res = await fetch(`/models/reid/${encodeURIComponent(name)}/download`, {method:'POST'}).catch(()=>null);
+  if (!res||!res.ok) {
+    btn.disabled=false; btn.textContent='⬇ Download';
+    setMsg('reid-dl-msg', `Failed to start download for ${name}`, 'err'); return;
+  }
+  // Poll until downloaded
+  const poll = setInterval(async()=>{
+    const r2 = await fetch('/models/reid/catalog').catch(()=>null);
+    if (!r2||!r2.ok) return;
+    const cat = await r2.json();
+    const entry = cat.find(m=>m.name===name);
+    if (entry && entry.downloaded) {
+      clearInterval(poll);
+      setMsg('reid-dl-msg', `✓ ${name} downloaded successfully`, 'ok');
+      loadReidCatalog();
+      populateReidDropdown();
+    }
+  }, 3000);
 }
 
 // ═══════════════════════════════════════════════════════════
@@ -561,6 +686,7 @@ function setStatus(msg) {
 // ═══════════════════════════════════════════════════════════
 refreshSessions();
 populateModelDropdown();
+populateReidDropdown();
 </script>
 </body>
 </html>

@@ -65,6 +65,7 @@ def draw_tracks(
     frame: np.ndarray,
     tracks: Optional[np.ndarray],
     zone_map: Optional[Dict[int, str]] = None,
+    show_id: bool = True,
 ) -> np.ndarray:
     """
     BoxMOT track format: (M, 8) — [x1, y1, x2, y2, track_id, conf, class_id, det_idx]
@@ -102,8 +103,9 @@ def draw_tracks(
         thickness = 3 if zone_name else 2
         cv2.rectangle(out, (x1, y1), (x2, y2), color, thickness)
 
-        # Primary label: Worker ID + confidence
-        label = f"{'Worker' if class_id == 0 else str(class_id)} #{track_id}  {conf:.2f}"
+        # Primary label: class name (+ ID if show_id is True)
+        class_name = "Worker" if class_id == 0 else str(class_id)
+        label = f"{class_name} #{track_id}  {conf:.2f}" if show_id else f"{class_name}  {conf:.2f}"
         (tw, th), _ = cv2.getTextSize(label, cv2.FONT_HERSHEY_SIMPLEX, 0.52, 2)
         cv2.rectangle(out, (x1, y1 - th - 8), (x1 + tw + 6, y1), color, -1)
         cv2.putText(out, label, (x1 + 3, y1 - 4),

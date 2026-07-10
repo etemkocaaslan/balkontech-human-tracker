@@ -1,0 +1,18 @@
+__pycache__/
+*.py[cod]
+*.pyo
+.venv/
+venv/
+
+# Large runtime data — provided via volume mounts at runtime
+models/
+videos/
+zones/
+api_keys.json
+
+# Dev artifacts
+.vscode/
+.idea/
+*.swp
+.DS_Store
+Thumbs.db

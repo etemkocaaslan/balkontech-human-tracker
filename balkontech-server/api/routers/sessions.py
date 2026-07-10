@@ -2,6 +2,7 @@ import logging
 from typing import List
 
 from fastapi import APIRouter, Depends, HTTPException
+from pydantic import BaseModel
 
 from api.dependencies import get_session_service, get_tracking_service, get_video_source_service
 from schemas.sessions import SessionCreateRequest, SessionInfo, TrackRequest, TrackResponse
@@ -71,9 +72,9 @@ def get_stats(
     return stats
 
 
-@router.get("", response_model=List[str])
+@router.get("", response_model=List[SessionInfo])
 def list_sessions(service: SessionService = Depends(get_session_service)):
-    return service.get_session_ids()
+    return service.list_sessions()
 
 
 @router.delete("/{session_id}", status_code=204)
@@ -83,3 +84,20 @@ def delete_session(
 ):
     if not service.delete(session_id):
         raise HTTPException(status_code=404, detail=f"Session '{session_id}' not found.")
+
+
+class DisplayOptions(BaseModel):
+    show_id: bool
+
+
+@router.patch("/{session_id}/display", status_code=200)
+def update_display(
+    session_id: str,
+    opts: DisplayOptions,
+    service: SessionService = Depends(get_session_service),
+):
+    """Toggle display options (e.g. show/hide track ID) on a live session."""
+    ok = service.set_display_options(session_id, show_id=opts.show_id)
+    if not ok:
+        raise HTTPException(status_code=404, detail=f"Session '{session_id}' not found.")
+    return {"session_id": session_id, "show_id": opts.show_id}

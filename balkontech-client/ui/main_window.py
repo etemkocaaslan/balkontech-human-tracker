@@ -138,7 +138,7 @@ class MainWindow(QMainWindow):
 
         left_scroll = QScrollArea()
         left_scroll.setWidgetResizable(True)
-        left_scroll.setFixedWidth(290)
+        left_scroll.setFixedWidth(320)
         left_scroll.setWidget(left_widget)
 
         self._stream_display = _StreamDisplay()
@@ -148,7 +148,7 @@ class MainWindow(QMainWindow):
         splitter.addWidget(self._stream_display)
         splitter.setStretchFactor(0, 0)
         splitter.setStretchFactor(1, 1)
-        splitter.setSizes([290, 900])
+        splitter.setSizes([320, 900])
 
         self.setCentralWidget(splitter)
 
