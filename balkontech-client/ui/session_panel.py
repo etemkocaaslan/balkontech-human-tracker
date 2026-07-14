@@ -365,7 +365,7 @@ class SessionPanel(QWidget):
                 video_path=self._video_edit.text().strip() or None,
                 det_skip=self._det_skip_spin.value(),
                 loop=self._loop_check.isChecked(),
-                device="cuda",
+                device="0",
             )
             self._set_status(f"✓ Created {resp['session_id'][:8]}…")
             self.refresh()

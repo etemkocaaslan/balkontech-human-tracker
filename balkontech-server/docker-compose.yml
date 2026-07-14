@@ -20,6 +20,7 @@ services:
     environment:
       - MODELS_DIR=/app/models
       - ZONES_DIR=/app/zones
+      - VIDEOS_DIR=/app/videos
       - API_KEYS_FILE=/app/api_keys.json
       # Custom models — remove the # to enable
       #- HF_MODEL_REPO=etemkocaaslan/balkontech-models
