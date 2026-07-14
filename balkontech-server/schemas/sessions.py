@@ -23,10 +23,16 @@ class SessionCreateRequest(BaseModel):
     target_classes: Optional[List[int]] = Field(default_factory=lambda: [0])
     imgsz: int = 640
     device: str = "cpu"
+    # ReID model — required for appearance-based trackers (boosttrack, botsort, strongsort, …)
+    reid_model: Optional[str] = Field(
+        None,
+        description="ReID model filename in models/reid/ (e.g. 'osnet_x0_25_msmt17.pt'). "
+                    "Required for appearance-based trackers; ignored for bytetrack / ocsort.",
+    )
     # Optional video source — when provided, the backend reads the video directly
     video_path: Optional[str] = Field(None, description="Path to a video file on the server machine.")
     video_id: Optional[str] = Field(None, description="Zone lookup key; defaults to the filename stem.")
-    det_skip: int = Field(2, ge=1, le=10, description="Run YOLO every N frames; ByteTrack predicts in between.")
+    det_skip: int = Field(2, ge=1, le=10, description="Run YOLO every N frames; tracker predicts in between.")
     fps_target: float = Field(25.0, gt=0, le=120)
     loop: bool = Field(False, description="Loop the video when it ends.")
 

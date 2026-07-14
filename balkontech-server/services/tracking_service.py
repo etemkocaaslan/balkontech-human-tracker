@@ -63,7 +63,7 @@ class TrackingService:
         annotated = frame.copy()
         if zones:
             draw_zones(annotated, zones)
-        annotated = draw_tracks(annotated, tracks, zone_map=zone_map)
+        annotated = draw_tracks(annotated, tracks, zone_map=zone_map, show_id=session.show_id)
 
         self._store.set_annotated_frame(session_id, encode_jpeg(annotated))
 

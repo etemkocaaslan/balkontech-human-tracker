@@ -1,47 +1,108 @@
 """
 Core tracking utilities.
 
-  build_bytetrack()  : create a ByteTrack instance with custom params
-  yolo_to_boxmot()   : convert Ultralytics YOLO output → BoxMOT (N,6) array
-  load_detector()    : load a YOLO model from path
+  build_tracker()   : factory — create any BoxMOT tracker by name
+  yolo_to_boxmot()  : convert Ultralytics YOLO output → BoxMOT (N,6) array
+  load_detector()   : load a YOLO model from path
+
+Supported tracker types
+-----------------------
+Motion-only (no ReID model required):
+  bytetrack, ocsort
+
+Appearance-based (reid_weights required):
+  boosttrack, botsort, strongsort, deepocsort, hybridsort
 """
 
 from pathlib import Path
-from typing import List, Optional
+from typing import Any, List, Optional
 
 import numpy as np
 from ultralytics import YOLO
-from boxmot.trackers import ByteTrack
+
+# ── Tracker registry ──────────────────────────────────────────────────────────
+_TRACKER_CLASS_MAP: dict[str, str] = {
+    "bytetrack":  "ByteTrack",
+    "ocsort":     "OcSort",
+    "boosttrack": "BoostTrack",
+    "botsort":    "BotSort",
+    "strongsort": "StrongSort",
+    "deepocsort": "DeepOcSort",
+    "hybridsort": "HybridSort",
+}
+
+# Trackers that run on motion only — no ReID model needed
+_MOTION_ONLY: set[str] = {"bytetrack", "ocsort"}
+
+# Public list for validation and UI dropdowns
+SUPPORTED_TRACKERS: List[str] = sorted(_TRACKER_CLASS_MAP.keys())
 
 
-def build_bytetrack(
-    track_buffer: int = 60,
-    frame_rate: int = 30,
-    max_age: int = 1000,
-    track_thresh: float = 0.45,
-    min_conf: float = 0.1,
-    match_thresh: float = 0.85,
-    min_hits: int = 1,
-    iou_threshold: float = 0.3,
+# ── Factory ───────────────────────────────────────────────────────────────────
+
+def build_tracker(
+    tracker_type: str,
+    device: str = "cpu",
+    reid_weights: Optional[Path] = None,
     per_class: bool = False,
-) -> ByteTrack:
+) -> Any:
     """
-    Create a ByteTrack instance. Device is not passed — ByteTrack is CPU-only
-    for motion calculations; the YOLO detector handles device selection separately.
-    """
-    return ByteTrack(
-        min_conf=min_conf,
-        track_thresh=track_thresh,
-        match_thresh=match_thresh,
-        track_buffer=track_buffer,
-        frame_rate=frame_rate,
-        det_thresh=track_thresh,
-        max_age=max_age,
-        min_hits=min_hits,
-        iou_threshold=iou_threshold,
-        per_class=per_class,
-    )
+    Create any BoxMOT tracker by name.
 
+    Parameters
+    ----------
+    tracker_type : str
+        One of SUPPORTED_TRACKERS (case-insensitive).
+    device : str
+        Torch device string — "cpu", "cuda:0", etc.
+        Ignored for motion-only trackers (ByteTrack, OcSort).
+    reid_weights : Path, optional
+        Path to a ReID model .pt file.
+        Required for appearance-based trackers; ignored for motion-only ones.
+    per_class : bool
+        Track each class independently.
+    """
+    key = tracker_type.lower()
+
+    if key not in _TRACKER_CLASS_MAP:
+        raise ValueError(
+            f"Unknown tracker '{tracker_type}'. "
+            f"Supported: {SUPPORTED_TRACKERS}"
+        )
+
+    if key not in _MOTION_ONLY and reid_weights is None:
+        raise ValueError(
+            f"Tracker '{tracker_type}' requires a ReID model. "
+            "Pass reid_weights or set reid_model in the session request."
+        )
+
+    try:
+        import importlib
+        module = importlib.import_module("boxmot.trackers")
+        cls = getattr(module, _TRACKER_CLASS_MAP[key])
+    except (ImportError, AttributeError) as exc:
+        raise RuntimeError(
+            f"Could not import tracker '{tracker_type}' from boxmot: {exc}"
+        ) from exc
+
+    if key in _MOTION_ONLY:
+        return cls(per_class=per_class)
+    else:
+        # BoxMOT trackers expect a pre-built ReID backend object, not a raw path.
+        # Build it via boxmot.reid.core.ReID, then pass .model (the backend).
+        try:
+            from boxmot.reid.core.reid import ReID
+            reid_obj = ReID(weights=reid_weights, device=device, half=False)
+            reid_backend = reid_obj.model
+        except Exception as exc:
+            raise RuntimeError(
+                f"Failed to load ReID model '{reid_weights}': {exc}"
+            ) from exc
+
+        return cls(reid_model=reid_backend, per_class=per_class)
+
+
+# ── Helpers ───────────────────────────────────────────────────────────────────
 
 def yolo_to_boxmot(results, target_classes: Optional[List[int]] = None) -> np.ndarray:
     """

@@ -1,8 +1,8 @@
 from dataclasses import dataclass, field
 from typing import Dict, List, Optional
 
+from typing import Any
 from ultralytics import YOLO
-from boxmot.trackers import ByteTrack
 
 from schemas.sessions import SessionCreateRequest
 
@@ -11,13 +11,15 @@ from schemas.sessions import SessionCreateRequest
 class Session:
     session_id: str
     detector: YOLO
-    tracker: ByteTrack
+    tracker: Any  # any BoxMOT tracker (ByteTrack, BotSort, StrongSort, …)
     config: SessionCreateRequest
-    frame_idx: int = 0
+    frame_index: int = 0
     last_track_count: int = 0
     last_annotated_frame: Optional[bytes] = field(default=None, repr=False)
     # {zone_name: [track_id, ...]} — updated every frame
     zone_occupancy: Dict[str, List[int]] = field(default_factory=dict)
+    # Display options — can be toggled at runtime via PATCH /sessions/{id}/display
+    show_id: bool = True
 
 
 class SessionStore:
@@ -45,8 +47,8 @@ class SessionStore:
         session = self._sessions.get(session_id)
         if session is None:
             raise KeyError(f"Session '{session_id}' not found.")
-        session.frame_idx += 1
-        return session.frame_idx
+        session.frame_index += 1
+        return session.frame_index
 
     def set_annotated_frame(self, session_id: str, jpeg_bytes: bytes) -> None:
         session = self._sessions.get(session_id)
@@ -57,6 +59,11 @@ class SessionStore:
         session = self._sessions.get(session_id)
         if session is not None:
             session.last_track_count = count
+
+    def set_display_options(self, session_id: str, *, show_id: bool) -> None:
+        session = self._sessions.get(session_id)
+        if session is not None:
+            session.show_id = show_id
 
     def set_zone_occupancy(self, session_id: str, occupancy: Dict[str, List[int]]) -> None:
         session = self._sessions.get(session_id)
@@ -69,7 +76,7 @@ class SessionStore:
             return None
         return {
             "session_id": session_id,
-            "frame_index": session.frame_idx,
+            "frame_index": session.frame_index,
             "track_count": session.last_track_count,
             "zone_occupancy": session.zone_occupancy,
         }
