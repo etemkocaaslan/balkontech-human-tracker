@@ -22,9 +22,10 @@ RUN mkdir -p /app/models/detectors /app/models/reid \
 
 ENV MODELS_DIR=/app/models
 ENV ZONES_DIR=/app/zones
+ENV VIDEOS_DIR=/app/videos
 ENV API_KEYS_FILE=/app/api_keys.json
 ENV PYTHONPATH=/app
 
 EXPOSE 8000
 
-CMD ["uvicorn", "api.main:app", "--host", "127.0.0.1", "--port", "8000"]
+CMD ["uvicorn", "api.main:app", "--host", "0.0.0.0", "--port", "8000"]
