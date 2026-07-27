@@ -32,6 +32,15 @@ class SessionCreateRequest(BaseModel):
     # Optional video source — when provided, the backend reads the video directly
     video_path: Optional[str] = Field(None, description="Path to a video file on the server machine.")
     video_id: Optional[str] = Field(None, description="Zone lookup key; defaults to the filename stem.")
+    # Google Drive file reference — when set, the server downloads the video from Drive
+    # instead of reading video_path directly. This is the primary transfer mechanism
+    # for the upload→create_session pipeline (video_path is ignored when drive_file_id is present).
+    drive_file_id: Optional[str] = Field(
+        None,
+        description="Google Drive file ID of the uploaded video. When provided, the server "
+                    "downloads the video from Drive before starting tracking. "
+                    "Takes precedence over video_path.",
+    )
     det_skip: int = Field(2, ge=1, le=10, description="Run YOLO every N frames; tracker predicts in between.")
     fps_target: float = Field(25.0, gt=0, le=120)
     loop: bool = Field(False, description="Loop the video when it ends.")
@@ -43,6 +52,14 @@ class SessionInfo(BaseModel):
     tracker_type: str
     device: str
     target_classes: Optional[List[int]]
+    # Current pipeline status — None means the session's video source
+    # is already running (legacy) or status is not tracked.
+    status: Optional[str] = Field(
+        None,
+        description="Session pipeline status: 'preparing', 'downloading', "
+                    "'running', 'error'. None for sessions created "
+                    "with video_path directly (legacy path).",
+    )
 
 
 class TrackRequest(BaseModel):

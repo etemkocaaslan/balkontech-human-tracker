@@ -5,6 +5,7 @@ from storage.session_store import SessionStore
 from storage.zone_store import ZoneStore
 from storage.api_key_store import ApiKeyStore
 from storage.model_bootstrapper import ModelBootstrapper
+from services.google_drive_service import GoogleDriveService
 from services.model_service import ModelService
 from services.session_service import SessionService
 from services.tracking_service import TrackingService
@@ -46,8 +47,13 @@ def get_tracking_service() -> TrackingService:
         zone_service=get_zone_service(),
     )
 
+@lru_cache(maxsize=1)
 def get_snapshot_service() -> SnapshotService:
     return SnapshotService()
+
+@lru_cache(maxsize=1)
+def get_google_drive_service() -> GoogleDriveService:
+    return GoogleDriveService()
 
 @lru_cache(maxsize=1)
 def get_video_source_service() -> VideoSourceService:

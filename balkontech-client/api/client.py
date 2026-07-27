@@ -84,6 +84,7 @@ class BHTClient:
         device: str = "cpu",
         video_id: Optional[str] = None,
         video_path: Optional[str] = None,
+        drive_file_id: Optional[str] = None,
         det_skip: int = 2,
         fps_target: float = 25.0,
         loop: bool = False,
@@ -106,6 +107,8 @@ class BHTClient:
             payload["video_id"] = video_id
         if video_path:
             payload["video_path"] = video_path
+        if drive_file_id:
+            payload["drive_file_id"] = drive_file_id
         return self._post("/sessions", json=payload)
 
     def list_sessions(self) -> List[Dict]:

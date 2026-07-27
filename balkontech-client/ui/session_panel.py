@@ -30,6 +30,7 @@ from PyQt6.QtWidgets import (
 )
 
 from api.client import BHTClient
+from ui.upload_worker import UploadWorker
 
 
 class SessionPanel(QWidget):
@@ -334,6 +335,8 @@ class SessionPanel(QWidget):
         if is_appearance:
             self._load_reid_catalog()
 
+    # ── Create session (sequential upload → create flow) ──────────
+
     def _create_session(self) -> None:
         idx = self._model_combo.currentIndex()
         model = (self._model_combo.itemData(idx)
@@ -355,14 +358,60 @@ class SessionPanel(QWidget):
                 )
                 return
 
+        video_path = self._video_edit.text().strip()
+        if not video_path:
+            QMessageBox.warning(self, "No video", "Select a video file first.")
+            return
+
+        self._create_btn.setEnabled(False)
+        self._set_status("Preparing upload…")
+
+        worker = UploadWorker(video_path)
+        worker.upload_started.connect(self._on_upload_started)
+        worker.upload_progress.connect(self._on_upload_progress)
+        worker.upload_finished.connect(self._on_upload_finished)
+        worker.upload_error.connect(self._on_upload_error)
+        self._upload_worker = worker
+        worker.start()
+
+    def _on_upload_started(self) -> None:
+        self._set_status("Uploading…")
+
+    def _on_upload_progress(self, pct: int) -> None:
+        self._set_status(f"Uploading… ({pct}%)")
+
+    def _on_upload_finished(self, file_id: str) -> None:
+        self._set_status("Preparing on server…")
+        self._do_create_session_request(drive_file_id=file_id)
+
+    def _on_upload_error(self, msg: str) -> None:
+        self._create_btn.setEnabled(True)
+        self._set_status(f"Upload hatası: {msg}", error=True)
+        QMessageBox.critical(self, "Upload failed", msg)
+
+    def _do_create_session_request(
+        self,
+        *,
+        drive_file_id: str | None = None,
+    ) -> None:
+        tracker_key = self._tracker_combo.currentData() or "bytetrack"
+        reid_model: str | None = None
+        if tracker_key not in self._motion_only:
+            reid_model = self._reid_combo.currentData() or ""
+
+        model_idx = self._model_combo.currentIndex()
+        model = (self._model_combo.itemData(model_idx)
+                 if model_idx >= 0 and self._model_combo.itemData(model_idx)
+                 else self._model_combo.currentText().strip())
+
         try:
             resp = self._client.create_session(
                 detector_model=model,
                 tracker_type=tracker_key,
-                reid_model=reid_model,
+                reid_model=reid_model or None,
                 conf_threshold=self._conf_spin.value(),
                 video_id=self._video_id_edit.text().strip() or None,
-                video_path=self._video_edit.text().strip() or None,
+                drive_file_id=drive_file_id,
                 det_skip=self._det_skip_spin.value(),
                 loop=self._loop_check.isChecked(),
                 device="0",
@@ -376,6 +425,8 @@ class SessionPanel(QWidget):
                     break
         except Exception as exc:
             QMessageBox.critical(self, "Create failed", str(exc))
+        finally:
+            self._create_btn.setEnabled(True)
 
     def _delete_session(self) -> None:
         sid = self.current_session_id()

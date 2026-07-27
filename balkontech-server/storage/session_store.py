@@ -20,6 +20,9 @@ class Session:
     zone_occupancy: Dict[str, List[int]] = field(default_factory=dict)
     # Display options — can be toggled at runtime via PATCH /sessions/{id}/display
     show_id: bool = True
+    # Pipeline status — set by the background download/preparation flow.
+    # Values: None (legacy/direct video_path), "preparing", "downloading", "running", "error"
+    video_pipeline_status: Optional[str] = None
 
 
 class SessionStore:
@@ -70,6 +73,11 @@ class SessionStore:
         if session is not None:
             session.zone_occupancy = occupancy
 
+    def set_video_pipeline_status(self, session_id: str, status: str) -> None:
+        session = self._sessions.get(session_id)
+        if session is not None:
+            session.video_pipeline_status = status
+
     def get_stats(self, session_id: str) -> Optional[dict]:
         session = self._sessions.get(session_id)
         if session is None:
@@ -79,4 +87,5 @@ class SessionStore:
             "frame_index": session.frame_index,
             "track_count": session.last_track_count,
             "zone_occupancy": session.zone_occupancy,
+            "pipeline_status": session.video_pipeline_status,
         }

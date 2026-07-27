@@ -109,6 +109,7 @@ class SessionService:
                 tracker_type=cfg.tracker_type,
                 device=cfg.device,
                 target_classes=cfg.target_classes,
+                status=session.video_pipeline_status,
             ))
         return result
 
