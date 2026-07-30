@@ -30,6 +30,7 @@ from PyQt6.QtWidgets import (
 )
 
 from api.client import BHTClient
+from ui.upload_worker import UploadWorker
 
 
 class SessionPanel(QWidget):
@@ -355,14 +356,67 @@ class SessionPanel(QWidget):
                 )
                 return
 
+        video_path = self._video_edit.text().strip()
+        if video_path:
+            # Video selected — upload first, then create session
+            self._create_btn.setEnabled(False)
+            self._set_status("Uploading… 0%")
+            worker = UploadWorker(self._client, video_path)
+            worker.upload_progress.connect(
+                lambda pct: self._set_status(f"Uploading… {pct}%")
+            )
+            worker.upload_finished.connect(self._on_upload_finished)
+            worker.upload_error.connect(self._on_upload_error)
+            self._upload_worker = worker  # keep reference alive
+            worker.start()
+        else:
+            # No video — create session for frame-by-frame API use
+            self._do_create_session(
+                model=model,
+                tracker_key=tracker_key,
+                reid_model=reid_model,
+                video_path=None,
+                video_id=None,
+            )
+
+    def _on_upload_finished(self, server_video_path: str, video_id: str) -> None:
+        self._set_status("Upload tamamlandı, session oluşturuluyor…")
+        idx = self._model_combo.currentIndex()
+        model = (self._model_combo.itemData(idx)
+                 if idx >= 0 and self._model_combo.itemData(idx)
+                 else self._model_combo.currentText().strip())
+        tracker_key = self._tracker_combo.currentData() or "bytetrack"
+        reid_model = self._reid_combo.currentData() if tracker_key not in self._motion_only else None
+        self._do_create_session(
+            model=model,
+            tracker_key=tracker_key,
+            reid_model=reid_model or None,
+            video_path=server_video_path,
+            video_id=self._video_id_edit.text().strip() or video_id,
+        )
+
+    def _on_upload_error(self, msg: str) -> None:
+        self._create_btn.setEnabled(True)
+        self._set_status(f"⚠ Upload hatası", error=True)
+        QMessageBox.critical(self, "Upload failed", msg)
+
+    def _do_create_session(
+        self,
+        *,
+        model: str,
+        tracker_key: str,
+        reid_model: str | None,
+        video_path: str | None,
+        video_id: str | None,
+    ) -> None:
         try:
             resp = self._client.create_session(
                 detector_model=model,
                 tracker_type=tracker_key,
                 reid_model=reid_model,
                 conf_threshold=self._conf_spin.value(),
-                video_id=self._video_id_edit.text().strip() or None,
-                video_path=self._video_edit.text().strip() or None,
+                video_id=video_id,
+                video_path=video_path,
                 det_skip=self._det_skip_spin.value(),
                 loop=self._loop_check.isChecked(),
                 device="0",
@@ -376,6 +430,8 @@ class SessionPanel(QWidget):
                     break
         except Exception as exc:
             QMessageBox.critical(self, "Create failed", str(exc))
+        finally:
+            self._create_btn.setEnabled(True)
 
     def _delete_session(self) -> None:
         sid = self.current_session_id()

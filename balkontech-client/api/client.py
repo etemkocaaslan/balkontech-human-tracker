@@ -8,7 +8,8 @@ intended for use inside QThread workers.
 
 from __future__ import annotations
 
-from typing import Any, Dict, List, Optional
+import os
+from typing import Any, Callable, Dict, List, Optional
 
 import requests
 
@@ -47,6 +48,10 @@ class BHTClient:
         r.raise_for_status()
         return r.status_code
 
+    def _upload_headers(self) -> Dict[str, str]:
+        """Headers for multipart upload — no Content-Type (requests sets boundary)."""
+        return {"X-API-Key": self.api_key}
+
     # ── Health ────────────────────────────────────────────────────────────────
 
     def health(self) -> Dict:
@@ -69,6 +74,51 @@ class BHTClient:
     def list_reid_catalog(self) -> List[Dict]:
         """Return the full ReID catalog with downloaded status from the server."""
         return self._get("/models/reid/catalog")
+
+    def upload_video(
+        self,
+        file_path: str,
+        on_progress: Optional[Callable[[int], None]] = None,
+    ) -> Dict:
+        """Upload a video file to the server.
+
+        Uses a file-like wrapper that reports progress via on_progress(pct).
+        Returns the server response: {video_path, video_id, filename, size_bytes}.
+        """
+        total    = os.path.getsize(file_path)
+        filename = os.path.basename(file_path)
+
+        class _ProgressReader:
+            def __init__(self_):
+                self_._f    = open(file_path, "rb")
+                self_._sent = 0
+
+            def read(self_, size: int = -1) -> bytes:
+                chunk = self_._f.read(size)
+                if chunk:
+                    self_._sent += len(chunk)
+                    if on_progress and total:
+                        on_progress(int(self_._sent / total * 100))
+                return chunk
+
+            def __len__(self_) -> int:
+                return total
+
+            def close(self_) -> None:
+                self_._f.close()
+
+        reader = _ProgressReader()
+        try:
+            r = self._session.post(
+                self._url("/upload"),
+                headers=self._upload_headers(),
+                files={"file": (filename, reader, "video/mp4")},
+                timeout=None,
+            )
+            r.raise_for_status()
+            return r.json()
+        finally:
+            reader.close()
 
     # ── Sessions ──────────────────────────────────────────────────────────────
 
