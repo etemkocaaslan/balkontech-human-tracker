@@ -5,3 +5,4 @@ PyQt6==6.7.1
 PyQt6-Qt6==6.7.1
 PyQt6-sip>=13.6.0
 requests>=2.32.0
+requests-toolbelt==1.0.0
