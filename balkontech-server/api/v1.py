@@ -7,7 +7,7 @@ Access requires X-API-Key header (enforced by ApiKeyMiddleware in main.py).
 
 from fastapi import APIRouter
 
-from api.routers import models, sessions, stream, zones
+from api.routers import models, sessions, stream, upload, zones
 
 # Aggregate all public routers under /api/v1
 router = APIRouter(prefix="/api/v1")
@@ -15,6 +15,7 @@ router = APIRouter(prefix="/api/v1")
 router.include_router(models.router)
 router.include_router(sessions.router)
 router.include_router(stream.router)
+router.include_router(upload.router)
 router.include_router(zones.router)
 
 
