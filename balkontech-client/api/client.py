@@ -80,45 +80,34 @@ class BHTClient:
         file_path: str,
         on_progress: Optional[Callable[[int], None]] = None,
     ) -> Dict:
-        """Upload a video file to the server.
+        """Upload a video file to the server with real network progress tracking.
 
-        Uses a file-like wrapper that reports progress via on_progress(pct).
+        Uses requests-toolbelt MultipartEncoderMonitor to report actual bytes
+        sent over the network via on_progress(pct).
         Returns the server response: {video_path, video_id, filename, size_bytes}.
         """
-        total    = os.path.getsize(file_path)
+        from requests_toolbelt import MultipartEncoder, MultipartEncoderMonitor
+
         filename = os.path.basename(file_path)
+        encoder  = MultipartEncoder(
+            fields={"file": (filename, open(file_path, "rb"), "video/mp4")}
+        )
 
-        class _ProgressReader:
-            def __init__(self_):
-                self_._f    = open(file_path, "rb")
-                self_._sent = 0
+        def _monitor_callback(monitor: MultipartEncoderMonitor) -> None:
+            if on_progress and monitor.len:
+                on_progress(int(monitor.bytes_read / monitor.len * 100))
 
-            def read(self_, size: int = -1) -> bytes:
-                chunk = self_._f.read(size)
-                if chunk:
-                    self_._sent += len(chunk)
-                    if on_progress and total:
-                        on_progress(int(self_._sent / total * 100))
-                return chunk
+        monitor = MultipartEncoderMonitor(encoder, _monitor_callback)
 
-            def __len__(self_) -> int:
-                return total
-
-            def close(self_) -> None:
-                self_._f.close()
-
-        reader = _ProgressReader()
-        try:
-            r = self._session.post(
-                self._url("/upload"),
-                headers=self._upload_headers(),
-                files={"file": (filename, reader, "video/mp4")},
-                timeout=None,
-            )
-            r.raise_for_status()
-            return r.json()
-        finally:
-            reader.close()
+        headers = {**self._upload_headers(), "Content-Type": monitor.content_type}
+        r = self._session.post(
+            self._url("/upload"),
+            headers=headers,
+            data=monitor,
+            timeout=None,
+        )
+        r.raise_for_status()
+        return r.json()
 
     # ── Sessions ──────────────────────────────────────────────────────────────
 
